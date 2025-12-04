@@ -70,7 +70,7 @@ algo_name = st.sidebar.selectbox("Algorithmus", ["K-Means"])
 
 if algo_name == "K-Means":
     k = st.sidebar.slider("K (Anzahl Cluster)", 2, 10, 3)
-    max_iter = st.sidebar.slider("Max Iterationen", 10, 200, 100)
+    max_iter = st.sidebar.slider("Max Iterationen", 10, 1000, 100)
     
     col_start, col_step = st.sidebar.columns(2)
     
@@ -92,12 +92,14 @@ if algo_name == "K-Means":
         if c1.button("Prev"):
             if st.session_state['algo_step'] > 0:
                 st.session_state['algo_step'] -= 1
+                st.session_state['algo_converged'] = False
         
         if c2.button("Next"):
-             if not st.session_state['algo_converged']:
+            if st.session_state['algo_step'] < len(algo.get_history()) - 1:
+                st.session_state['algo_step'] += 1
                 converged = algo.step(st.session_state['X'])
                 st.session_state['algo_converged'] = converged
-                st.session_state['algo_step'] = len(algo.get_history()) - 1
+
 
         if c3.button("Play"):
             if not st.session_state['algo_converged']:
