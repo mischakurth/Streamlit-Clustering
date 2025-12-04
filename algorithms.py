@@ -35,7 +35,7 @@ class ClusteringAlgorithm(ABC):
 
 class KMeansManual(ClusteringAlgorithm):
     """
-    Placeholder for the user's manual K-Means implementation.
+    Manual K-Means implementation with step-by-step execution support.
     """
     def __init__(self, k=3, max_iter=100):
         super().__init__({"k": k, "max_iter": max_iter})
@@ -43,13 +43,65 @@ class KMeansManual(ClusteringAlgorithm):
         self.max_iter = max_iter
         self.centroids = None
         self.labels = None
+        self.history = [] # List of dicts: {'centroids': ..., 'labels': ...}
+        self.initialized = False
         
-    def fit(self, X: np.ndarray):
-        # TODO: USER IMPLEMENTATION HERE
-        # This is just a dummy implementation for visualization purposes
+    def initialize(self, X: np.ndarray):
+        """Initializes centroids randomly."""
         n_samples = X.shape[0]
-        self.labels = np.random.randint(0, self.k, size=n_samples)
-        self.centroids = np.random.rand(self.k, X.shape[1])
+        # Random initialization
+        indices = np.random.choice(n_samples, self.k, replace=False)
+        self.centroids = X[indices].copy()
+        self.labels = np.zeros(n_samples, dtype=int)
+        self.history = []
+        self._save_state()
+        self.initialized = True
+        return self
+
+    def _save_state(self):
+        self.history.append({
+            'centroids': self.centroids.copy(),
+            'labels': self.labels.copy()
+        })
+
+    def step(self, X: np.ndarray) -> bool:
+        """
+        Performs one step of K-Means.
+        Returns True if converged, False otherwise.
+        """
+        if not self.initialized:
+            self.initialize(X)
+
+        # 1. Assign labels based on closest centroid
+        distances = np.linalg.norm(X[:, np.newaxis] - self.centroids, axis=2)
+        new_labels = np.argmin(distances, axis=1)
+        
+        # Check for convergence (labels didn't change)
+        if np.array_equal(self.labels, new_labels) and len(self.history) > 1:
+             return True
+
+        self.labels = new_labels
+
+        # 2. Update centroids
+        new_centroids = np.zeros_like(self.centroids)
+        for i in range(self.k):
+            points = X[self.labels == i]
+            if len(points) > 0:
+                new_centroids[i] = points.mean(axis=0)
+            else:
+                # Handle empty cluster: keep old centroid or re-initialize
+                new_centroids[i] = self.centroids[i] 
+        
+        self.centroids = new_centroids
+        self._save_state()
+        
+        return False
+
+    def fit(self, X: np.ndarray):
+        self.initialize(X)
+        for _ in range(self.max_iter):
+            if self.step(X):
+                break
         return self
         
     def get_labels(self) -> np.ndarray:
@@ -57,3 +109,6 @@ class KMeansManual(ClusteringAlgorithm):
         
     def get_centroids(self) -> np.ndarray:
         return self.centroids
+    
+    def get_history(self):
+        return self.history
