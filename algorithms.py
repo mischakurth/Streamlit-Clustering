@@ -46,22 +46,54 @@ class KMeansManual(ClusteringAlgorithm):
         self.history = [] # List of dicts: {'centroids': ..., 'labels': ...}
         self.initialized = False
         
-    def initialize(self, X: np.ndarray):
-        """Initializes centroids randomly."""
+    def initialize(self, X: np.ndarray, method='random'):
+        """Initializes centroids."""
         n_samples = X.shape[0]
-        # Random initialization
-        indices = np.random.choice(n_samples, self.k, replace=False)
-        self.centroids = X[indices].copy()
-        self.labels = np.zeros(n_samples, dtype=int)
         self.history = []
-        self._save_state()
+        
+        if method == 'random':
+            indices = np.random.choice(n_samples, self.k, replace=False)
+            self.centroids = X[indices].copy()
+        elif method == 'k-means++':
+            # 1. Choose first center randomly
+            self.centroids = np.zeros((self.k, X.shape[1]))
+            first_idx = np.random.randint(n_samples)
+            self.centroids[0] = X[first_idx]
+            
+            for i in range(1, self.k):
+                # 2. Compute distances to nearest existing center
+                # Distances from each point to each existing centroid
+                distances = np.linalg.norm(X[:, np.newaxis] - self.centroids[:i], axis=2)
+                # Min distance for each point to any existing centroid
+                min_distances = np.min(distances, axis=1)
+                
+                # 3. Choose next center with probability proportional to distance squared
+                probs = min_distances**2 / np.sum(min_distances**2)
+                next_idx = np.random.choice(n_samples, p=probs)
+                self.centroids[i] = X[next_idx]
+        else:
+            raise ValueError(f"Unknown initialization method: {method}")
+
+        self.labels = np.zeros(n_samples, dtype=int)
+        self._save_state(X)
         self.initialized = True
         return self
 
-    def _save_state(self):
+    def _save_state(self, X: np.ndarray):
+        # Calculate inertia (sum of squared distances to closest centroid)
+        inertia = 0.0
+        if self.centroids is not None and self.labels is not None:
+             for i in range(self.k):
+                 points = X[self.labels == i]
+                 if len(points) > 0:
+                     # Squared Euclidean distance
+                     sq_dists = np.sum((points - self.centroids[i])**2, axis=1)
+                     inertia += np.sum(sq_dists)
+
         self.history.append({
             'centroids': self.centroids.copy(),
-            'labels': self.labels.copy()
+            'labels': self.labels.copy(),
+            'inertia': inertia
         })
 
     def step(self, X: np.ndarray) -> bool:
@@ -93,7 +125,7 @@ class KMeansManual(ClusteringAlgorithm):
                 new_centroids[i] = self.centroids[i] 
         
         self.centroids = new_centroids
-        self._save_state()
+        self._save_state(X)
         
         return False
 
