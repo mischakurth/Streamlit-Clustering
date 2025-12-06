@@ -143,28 +143,34 @@ if algo_name == "K-Means":
             st.error("Bitte zuerst Daten generieren!")
 
     
-    # Pre-calculate current step data for use in Sidebar and Plot
-    current_step_idx = st.session_state.get('algo_step', 0)
-    history_item = None
-    inertia = None
-    labels = None
-    centroids = None
-    
-    if 'algo' in st.session_state and len(st.session_state['algo'].history) > 0:
-        # Ensure index is within bounds
-        current_step_idx = min(current_step_idx, len(st.session_state['algo'].history) - 1)
-        history_item = st.session_state['algo'].history[current_step_idx]
-        labels = history_item['labels']
-        centroids = history_item['centroids']
-        if 'inertia' in history_item:
-            inertia = history_item['inertia']
+    # Main visualization fragment (handles plot, controls, and dynamic sidebar updates)
+    @st.fragment
+    def render_visualization():
+        X = st.session_state['X']
+        algo_name = "K-Means" # Hardcoded for now based on current logic, or pass as arg if dynamic
+        
+        # Pre-calculate current step data
+        current_step_idx = st.session_state.get('algo_step', 0)
+        history_item = None
+        inertia = None
+        labels = None
+        centroids = None
+        
+        if 'algo' in st.session_state and len(st.session_state['algo'].history) > 0:
+            current_step_idx = min(current_step_idx, len(st.session_state['algo'].history) - 1)
+            history_item = st.session_state['algo'].history[current_step_idx]
+            labels = history_item['labels']
+            centroids = history_item['centroids']
+            inertia = history_item.get('inertia')
 
-    # --- Sidebar: Details ---
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Details")
-    if st.session_state['data_generated']:
-        st.sidebar.write(f"Punkte: {st.session_state['X'].shape[0]}")
+        # --- Sidebar: Details (Updated dynamically) ---
+        # We use an empty container placeholder created outside or just overwrite using st.sidebar methods
+        # Streamlit allows writing to sidebar from anywhere
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Details")
+        st.sidebar.write(f"Punkte: {X.shape[0]}")
         st.sidebar.write(f"Algorithmus: {algo_name}")
+        # Note: 'k' variable is available from global scope (closure)
         if algo_name == "K-Means":
             st.sidebar.write(f"K: {k}")
         
@@ -177,10 +183,8 @@ if algo_name == "K-Means":
                     percentage = (c_val / inertia * 100) if inertia > 0 else 0
                     st.sidebar.write(f"- Cluster {c_id}: {c_val:.2f} ({percentage:.1f}%)")
 
-    # --- Main Area: Visualization ---
-    if st.session_state['data_generated']:
-        X = st.session_state['X']
-        
+
+        # --- Main Area ---
         # Title logic
         if history_item:
             title = f"Ergebnis: {algo_name} (Schritt {current_step_idx})"
@@ -241,29 +245,31 @@ if algo_name == "K-Means":
             
             c1.button("Prev", use_container_width=True, on_click=prev_step)
             c2.button("Next", use_container_width=True, on_click=next_step)
-            c3.button("Autoplay", use_container_width=True, on_click=toggle_autoplay)
+            # Autoplay using fragment-safe rerun
+            if st.session_state.get('autoplay', False):
+                 c3.button("Stop", use_container_width=True, on_click=toggle_autoplay)
+            else:
+                 c3.button("Autoplay", use_container_width=True, on_click=toggle_autoplay)
+                 
             c4.button("End", use_container_width=True, on_click=end_step)
 
             st.write(f"Schritt: {st.session_state['algo_step']}")
             if st.session_state['algo_converged']:
                 st.success("Konvergiert!")
+        
+        # Autoplay Logic (Inside fragment)
+        if 'algo' in st.session_state and st.session_state.get('autoplay', False):
+            algo = st.session_state['algo']
+            if st.session_state['algo_step'] < len(algo.get_history()) - 1:
+                time.sleep(0.3)
+                st.session_state['algo_step'] += 1
+                st.session_state['algo_converged'] = (st.session_state['algo_step'] == len(algo.get_history()) - 1)
+                st.rerun()
+            else:
+                st.session_state['autoplay'] = False
+                st.rerun()
 
+    if st.session_state['data_generated']:
+        render_visualization()
     else:
         st.info("Generiere Daten über die Sidebar, um zu beginnen.")
-
-
-# Autoplay Logic (Placed at the end to ensure plot is updated before rerun)
-if 'algo' in st.session_state and st.session_state['autoplay']:
-    algo = st.session_state['algo']
-    
-    # Playback history
-    if st.session_state['algo_step'] < len(algo.get_history()) - 1:
-        # Wait to let user see current step
-        time.sleep(0.3)
-        
-        st.session_state['algo_step'] += 1
-        st.session_state['algo_converged'] = (st.session_state['algo_step'] == len(algo.get_history()) - 1)
-        st.rerun()
-    else:
-        st.session_state['autoplay'] = False
-        st.rerun()
