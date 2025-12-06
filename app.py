@@ -13,13 +13,58 @@ st.title("Clustering Algorithmen Visualisierung")
 import json
 import time
 
+# --- Callbacks ---
+
+def update_from_slider():
+    if 'slider_step' in st.session_state:
+        st.session_state['algo_step'] = st.session_state['slider_step']
+        st.session_state['autoplay'] = False
+        # Update convergence status based on slider
+        if 'algo' in st.session_state:
+             algo = st.session_state['algo']
+             st.session_state['algo_converged'] = (st.session_state['algo_step'] == len(algo.get_history()) - 1)
+
+def prev_step():
+    if 'algo' in st.session_state:
+        st.session_state['autoplay'] = False
+        if st.session_state['algo_step'] > 0:
+            st.session_state['algo_step'] -= 1
+            st.session_state['algo_converged'] = False
+            st.session_state['slider_step'] = st.session_state['algo_step']
+
+def next_step():
+    if 'algo' in st.session_state:
+        algo = st.session_state['algo']
+        st.session_state['autoplay'] = False
+        if st.session_state['algo_step'] < len(algo.get_history()) - 1:
+            st.session_state['algo_step'] += 1
+            st.session_state['slider_step'] = st.session_state['algo_step']
+        
+        # Check convergence for UI
+        st.session_state['algo_converged'] = (st.session_state['algo_step'] == len(algo.get_history()) - 1)
+
+def end_step():
+    if 'algo' in st.session_state:
+        algo = st.session_state['algo']
+        st.session_state['autoplay'] = False
+        # algo is already fitted
+        st.session_state['algo_step'] = len(algo.get_history()) - 1
+        st.session_state['slider_step'] = st.session_state['algo_step']
+        st.session_state['algo_converged'] = True
+
+def toggle_autoplay():
+    st.session_state['autoplay'] = not st.session_state.get('autoplay', False)
+
+
+
+
 # --- Sidebar: Data Generation ---
 st.sidebar.header("1. Daten Generierung")
 data_source = st.sidebar.radio("Datenquelle", ["Generieren", "Importieren"])
 
 if data_source == "Generieren":
-    data_type = st.sidebar.selectbox("Datensatz Typ", ["blobs", "moons", "circles", "uniform", "aniso"])
-    n_samples = st.sidebar.slider("Anzahl Punkte", 100, 1000, 300)
+    data_type = st.sidebar.selectbox("Datensatz Typ", ["uniform", "blobs", "moons", "circles", "aniso"])
+    n_samples = st.sidebar.slider("Anzahl Punkte", 100, 4000, 400)
     n_features = 2 # Fixed for 2D visualization
     
     centers = 4
@@ -86,117 +131,139 @@ if algo_name == "K-Means":
             algo = KMeansManual(k=k, max_iter=max_iter)
             method = "random" if init_method == "Random" else "k-means++"
             algo.initialize(st.session_state['X'], method=method)
+            # Pre-calculate everything
+            algo.fit(st.session_state['X'])
+            
             st.session_state['algo'] = algo
             st.session_state['algo_step'] = 0
-            st.session_state['algo_converged'] = False
+            st.session_state['slider_step'] = 0
+            # False initially (unless history has only 1 step which means immediate convergence)
+            st.session_state['algo_converged'] = (len(algo.get_history()) <= 1)
         else:
             st.error("Bitte zuerst Daten generieren!")
 
-    if 'algo' in st.session_state:
-        algo = st.session_state['algo']
+    
+    # Pre-calculate current step data for use in Sidebar and Plot
+    current_step_idx = st.session_state.get('algo_step', 0)
+    history_item = None
+    inertia = None
+    labels = None
+    centroids = None
+    
+    if 'algo' in st.session_state and len(st.session_state['algo'].history) > 0:
+        # Ensure index is within bounds
+        current_step_idx = min(current_step_idx, len(st.session_state['algo'].history) - 1)
+        history_item = st.session_state['algo'].history[current_step_idx]
+        labels = history_item['labels']
+        centroids = history_item['centroids']
+        if 'inertia' in history_item:
+            inertia = history_item['inertia']
+
+    # --- Sidebar: Details ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Details")
+    if st.session_state['data_generated']:
+        st.sidebar.write(f"Punkte: {st.session_state['X'].shape[0]}")
+        st.sidebar.write(f"Algorithmus: {algo_name}")
+        if algo_name == "K-Means":
+            st.sidebar.write(f"K: {k}")
         
-        # Navigation Controls
-        c1, c2, c3, c4 = st.sidebar.columns(4)
-        if c1.button("Prev"):
-            st.session_state['autoplay'] = False
-            if st.session_state['algo_step'] > 0:
-                st.session_state['algo_step'] -= 1
-                st.session_state['algo_converged'] = False
-        
-        if c2.button("Next"):
-            st.session_state['autoplay'] = False
-            if st.session_state['algo_step'] < len(algo.get_history()) - 1:
-                st.session_state['algo_step'] += 1
-            elif not st.session_state['algo_converged']:
-                converged = algo.step(st.session_state['X'])
-                st.session_state['algo_converged'] = converged
-                st.session_state['algo_step'] = len(algo.get_history()) - 1
+        if inertia is not None:
+            st.sidebar.metric("Varianz (Inertia)", f"{inertia:.2f}")
+            
+            if history_item and 'cluster_inertia' in history_item:
+                st.sidebar.write("Varianz pro Cluster:")
+                for c_id, c_val in history_item['cluster_inertia'].items():
+                    percentage = (c_val / inertia * 100) if inertia > 0 else 0
+                    st.sidebar.write(f"- Cluster {c_id}: {c_val:.2f} ({percentage:.1f}%)")
 
-
-        if c3.button("Autoplay"):
-            st.session_state['autoplay'] = not st.session_state['autoplay']
-
-        if c4.button("End"):
-             st.session_state['autoplay'] = False
-             algo.fit(st.session_state['X'])
-             st.session_state['algo_converged'] = True
-             st.session_state['algo_step'] = len(algo.get_history()) - 1
-             
-        # Autoplay Logic
-        if st.session_state['autoplay'] and not st.session_state['algo_converged']:
-            converged = algo.step(st.session_state['X'])
-            st.session_state['algo_converged'] = converged
-            st.session_state['algo_step'] = len(algo.get_history()) - 1
-            time.sleep(0.2)
-            st.rerun()
-        elif st.session_state['autoplay'] and st.session_state['algo_converged']:
-            st.session_state['autoplay'] = False
-
-        st.sidebar.write(f"Schritt: {st.session_state['algo_step']}")
-        if st.session_state['algo_converged']:
-            st.sidebar.success("Konvergiert!")
-
-# --- Main Area: Visualization ---
-col1, col2 = st.columns([3, 1])
-
-with col1:
+    # --- Main Area: Visualization ---
     if st.session_state['data_generated']:
         X = st.session_state['X']
         
-        # Determine colors and centroids based on current step
-        inertia = None
-        if 'algo' in st.session_state and len(st.session_state['algo'].history) > 0:
-            step_idx = st.session_state['algo_step']
-            # Ensure index is within bounds (safety check)
-            step_idx = min(step_idx, len(st.session_state['algo'].history) - 1)
-            
-            history_item = st.session_state['algo'].history[step_idx]
-            labels = history_item['labels']
-            centroids = history_item['centroids']
-            if 'inertia' in history_item:
-                inertia = history_item['inertia']
-            title = f"Ergebnis: {algo_name} (Schritt {step_idx})"
+        # Title logic
+        if history_item:
+            title = f"Ergebnis: {algo_name} (Schritt {current_step_idx})"
+            if 'action' in history_item and history_item['action']:
+                title += f" - {history_item['action']}"
+            if st.session_state.get('algo_converged', False):
+                title += " - Konvergiert!"
         else:
-            labels = np.zeros(X.shape[0], dtype=int) # Default color
-            centroids = None
-            title = "Rohdaten"
-            
+             labels = np.zeros(X.shape[0], dtype=int) # Default color
+             title = "Rohdaten"
+
         # Create Plotly figure
         df = pd.DataFrame(X, columns=['x', 'y'])
         
         # Add counts to labels
-        unique_labels, counts = np.unique(labels, return_counts=True)
-        label_map = {lbl: f"Cluster {lbl} (n={count})" for lbl, count in zip(unique_labels, counts)}
-        df['label_desc'] = [label_map[l] for l in labels]
-        
-        # Sort by label to ensure consistent color assignment if possible, or just let Plotly handle it
-        df = df.sort_values('label_desc')
+        if labels is not None:
+             unique_labels, counts = np.unique(labels, return_counts=True)
+             label_map = {lbl: f"Cluster {lbl} (n={count})" for lbl, count in zip(unique_labels, counts)}
+             df['label_desc'] = [label_map[l] for l in labels]
+             df = df.sort_values('label_desc')
+             color_col = 'label_desc'
+        else:
+             color_col = None
 
-        fig = px.scatter(df, x='x', y='y', color='label_desc', title=title, 
-                         color_discrete_sequence=px.colors.qualitative.G10)
+        fig = px.scatter(df, x='x', y='y', color=color_col, title=title, 
+                         color_discrete_sequence=px.colors.qualitative.G10,
+                         render_mode='svg')
         
         # Add centroids if available
         if centroids is not None:
             fig.add_trace(go.Scatter(
                 x=centroids[:, 0], y=centroids[:, 1],
                 mode='markers',
-                marker=dict(symbol='x', size=12, color='black', line=dict(width=2, color='white')),
+                marker=dict(symbol='x', size=14, color='black', line=dict(width=3, color='white')),
                 name='Zentren'
             ))
         
+        # Render Plot (Full Width)
+        fig.update_layout(height=600) # Ensure it's tall enough
         st.plotly_chart(fig, use_container_width=True)
+        
+        # --- Controls (Below Plot) ---
+        if 'algo' in st.session_state:
+            algo = st.session_state['algo']
+            
+            # --- Timeline Slider ---
+            real_max_step = max(0, len(algo.get_history()) - 1)
+            slider_max = max(1, real_max_step)
+            slider_disabled = (real_max_step == 0)
+
+            # Sync slider with logic state before rendering
+            st.session_state['slider_step'] = st.session_state['algo_step']
+            
+            st.slider("Zeitachse (Schritt)", 0, slider_max, key="slider_step", on_change=update_from_slider, disabled=slider_disabled)
+
+            # Using columns for centering or spacing controls
+            c1, c2, c3, c4 = st.columns(4)
+            
+            c1.button("Prev", use_container_width=True, on_click=prev_step)
+            c2.button("Next", use_container_width=True, on_click=next_step)
+            c3.button("Autoplay", use_container_width=True, on_click=toggle_autoplay)
+            c4.button("End", use_container_width=True, on_click=end_step)
+
+            st.write(f"Schritt: {st.session_state['algo_step']}")
+            if st.session_state['algo_converged']:
+                st.success("Konvergiert!")
+
     else:
         st.info("Generiere Daten über die Sidebar, um zu beginnen.")
 
-with col2:
-    st.subheader("Details")
-    if st.session_state['data_generated']:
-        st.write(f"Punkte: {st.session_state['X'].shape[0]}")
-        if 'algo' in st.session_state:
-            st.write(f"Algorithmus: {algo_name}")
-            if algo_name == "K-Means":
-                st.write(f"K: {k}")
-            
-            if inertia is not None:
-                st.metric("Varianz (Inertia)", f"{inertia:.2f}")
 
+# Autoplay Logic (Placed at the end to ensure plot is updated before rerun)
+if 'algo' in st.session_state and st.session_state['autoplay']:
+    algo = st.session_state['algo']
+    
+    # Playback history
+    if st.session_state['algo_step'] < len(algo.get_history()) - 1:
+        # Wait to let user see current step
+        time.sleep(0.3)
+        
+        st.session_state['algo_step'] += 1
+        st.session_state['algo_converged'] = (st.session_state['algo_step'] == len(algo.get_history()) - 1)
+        st.rerun()
+    else:
+        st.session_state['autoplay'] = False
+        st.rerun()

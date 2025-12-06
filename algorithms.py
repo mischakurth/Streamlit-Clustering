@@ -77,11 +77,11 @@ class KMeansManual(ClusteringAlgorithm):
             raise ValueError(f"Unknown initialization method: {method}")
 
         self.labels = np.zeros(n_samples, dtype=int)
-        self._save_state(X)
+        self._save_state(X, action_description="Initialisierung")
         self.initialized = True
         return self
 
-    def _save_state(self, X: np.ndarray):
+    def _save_state(self, X: np.ndarray, action_description: str = ""):
         # Calculate inertia (sum of squared distances to closest centroid)
         inertia = 0.0
         cluster_inertia = {}
@@ -101,7 +101,8 @@ class KMeansManual(ClusteringAlgorithm):
             'centroids': self.centroids.copy(),
             'labels': self.labels.copy(),
             'inertia': inertia,
-            'cluster_inertia': cluster_inertia
+            'cluster_inertia': cluster_inertia,
+            'action': action_description
         })
 
     def step(self, X: np.ndarray) -> bool:
@@ -117,14 +118,14 @@ class KMeansManual(ClusteringAlgorithm):
             distances = np.linalg.norm(X[:, np.newaxis] - self.centroids, axis=2)
             new_labels = np.argmin(distances, axis=1)
             
-            # Check for convergence (labels didn't change)
-            # Note: We only check convergence after assignment
+            # Check for convergence (labels didn't change) after assignment
+            # Only return True if we've done at least one full cycle (history > 1)
             if np.array_equal(self.labels, new_labels) and len(self.history) > 1:
                  return True
 
             self.labels = new_labels
             self.phase = 'update'
-            self._save_state(X)
+            self._save_state(X, action_description="Punkte zugewiesen")
             return False
 
         elif self.phase == 'update':
@@ -140,9 +141,9 @@ class KMeansManual(ClusteringAlgorithm):
             
             self.centroids = new_centroids
             self.phase = 'assign'
-            self._save_state(X)
+            self._save_state(X, action_description="Zentren angepasst")
             return False
-        
+            
         return False
 
     def fit(self, X: np.ndarray):
