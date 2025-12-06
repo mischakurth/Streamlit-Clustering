@@ -155,11 +155,8 @@ try:
     st.sidebar.write(f"RecordBatch: {hasattr(pyarrow, 'RecordBatch')}")
 except ImportError:
     st.sidebar.write("PyArrow: Not Found")
-try:
-    import sklearn
-    st.sidebar.write(f"Sklearn Version: {sklearn.__version__}")
-except:
-    pass
+# Sklearn check removed due to potential crash
+st.sidebar.write("Debug: Checkpoint Pre-Algo")
 # ------------------
 
 # --- Sidebar: Algorithm Selection ---
