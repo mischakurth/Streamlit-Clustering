@@ -141,23 +141,35 @@ elif data_source == "Importieren":
         except Exception as e:
             st.error(f"Fehler beim Import: {e}")
 
-# Initialize session state if not present
-if 'data_generated' not in st.session_state:
-    st.session_state['data_generated'] = False
-if 'autoplay' not in st.session_state:
-    st.session_state['autoplay'] = False
+# ... imports ...
+st.title("Clustering Algorithmen Visualisierung")
+st.write("Trace: 1 - Start")
 
-# --- Debug Info ---
-st.sidebar.markdown("---")
-# st.sidebar.subheader("Debug Info") 
+# ...
 
+# --- Sidebar: Data Generation ---
+st.sidebar.header("1. Daten Generierung")
+# ...
+    # Initialize session state if not present
+    if 'data_generated' not in st.session_state:
+        st.session_state['data_generated'] = False
+    if 'autoplay' not in st.session_state:
+        st.session_state['autoplay'] = False
 
-# --- Sidebar: Algorithm Selection ---
-st.sidebar.header("2. Algorithmus")
-algo_name = st.sidebar.selectbox("Algorithmus", ["K-Means"])
+    st.write("Trace: 2 - Post Data Gen")
 
-if algo_name == "K-Means":
-    k = st.sidebar.slider("K (Anzahl Cluster)", 2, 10, 3)
+    # --- Debug Info ---
+    # ...
+
+    # --- Sidebar: Algorithm Selection ---
+    st.sidebar.header("2. Algorithmus")
+    st.write("Trace: 3 - Pre Algo Select")
+    algo_name = st.sidebar.selectbox("Algorithmus", ["K-Means"])
+
+    if algo_name == "K-Means":
+        st.write("Trace: 4 - Inside K-Means")
+        k = st.sidebar.slider("K (Anzahl Cluster)", 2, 10, 3)
+
     max_iter = st.sidebar.slider("Max Iterationen", 10, 1000, 100)
     init_method = st.sidebar.selectbox("Initialisierung", ["Random", "K-Means++"])
     
