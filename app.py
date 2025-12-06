@@ -116,7 +116,8 @@ if data_source == "Generieren":
             # Reset algorithm state
             if 'algo' in st.session_state:
                 del st.session_state['algo']
-            st.rerun()
+            # st.rerun() unnecessary in standard flow, removing to prevent stlite issues
+            st.success("Daten erfolgreich generiert!")
         except Exception as e:
             st.error(f"Fehler bei Datengenerierung: {e}")
 
