@@ -81,124 +81,129 @@ def toggle_autoplay():
 
 # --- Visualization Function (Global Scope) ---
 def render_visualization():
-    X = st.session_state.get('X')
-    if X is None:
-        return
+    try:
+        X = st.session_state.get('X')
+        if X is None:
+            return
 
-    algo_name = "K-Means" # Default/Current
-    
-    # Pre-calculate current step data
-    current_step_idx = st.session_state.get('algo_step', 0)
-    history_item = None
-    inertia = None
-    labels = None
-    centroids = None
-    
-    if 'algo' in st.session_state and len(st.session_state['algo'].history) > 0:
-        current_step_idx = min(current_step_idx, len(st.session_state['algo'].history) - 1)
-        history_item = st.session_state['algo'].history[current_step_idx]
-        labels = history_item['labels']
-        centroids = history_item['centroids']
-        inertia = history_item.get('inertia')
-
-    # --- Sidebar: Details ---
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Details")
-    st.sidebar.write(f"Punkte: {X.shape[0]}")
-    
-    if inertia is not None:
-        st.sidebar.metric("Varianz (Inertia)", f"{inertia:.2f}")
-        if history_item and 'cluster_inertia' in history_item:
-            st.sidebar.write("Varianz pro Cluster:")
-            for c_id, c_val in history_item['cluster_inertia'].items():
-                percentage = (c_val / inertia * 100) if inertia > 0 else 0
-                st.sidebar.write(f"- Cluster {c_id}: {c_val:.2f} ({percentage:.1f}%)")
-
-    # --- Layout: 2 Columns (Plot | Controls) ---
-    col_plot, col_controls = st.columns([0.75, 0.25], gap="large")
-
-    with col_plot:
-        # Title logic
-        if history_item:
-            title = f"Ergebnis: {algo_name} (Schritt {current_step_idx})"
-            if 'action' in history_item and history_item['action']:
-                title += f" - {history_item['action']}"
-        else:
-            labels = np.zeros(X.shape[0], dtype=int)
-            title = "Rohdaten"
-
-        # Create Plotly figure
-        df = pd.DataFrame(X, columns=['x', 'y'])
+        algo_name = "K-Means" # Default/Current
         
-        if labels is not None:
-            unique_labels, counts = np.unique(labels, return_counts=True)
-            label_map = {lbl: f"Cluster {lbl} (n={count})" for lbl, count in zip(unique_labels, counts)}
-            df['label_desc'] = [label_map[l] for l in labels]
-            df = df.sort_values('label_desc')
-            color_col = 'label_desc'
-        else:
-            color_col = None
-
-        fig = px.scatter(df, x='x', y='y', color=color_col, title=title, 
-                        color_discrete_sequence=px.colors.qualitative.G10,
-                        render_mode='svg')
+        # Pre-calculate current step data
+        current_step_idx = st.session_state.get('algo_step', 0)
+        history_item = None
+        inertia = None
+        labels = None
+        centroids = None
         
-        if centroids is not None:
-            fig.add_trace(go.Scatter(
-                x=centroids[:, 0], y=centroids[:, 1],
-                mode='markers',
-                marker=dict(symbol='x', size=14, color='black', line=dict(width=3, color='white')),
-                name='Zentren'
-            ))
+        if 'algo' in st.session_state and len(st.session_state['algo'].history) > 0:
+            current_step_idx = min(current_step_idx, len(st.session_state['algo'].history) - 1)
+            history_item = st.session_state['algo'].history[current_step_idx]
+            labels = history_item['labels']
+            centroids = history_item['centroids']
+            inertia = history_item.get('inertia')
+
+        # --- Sidebar: Details ---
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Details")
+        st.sidebar.write(f"Punkte: {X.shape[0]}")
         
-        # Increase height to use the vertical space better
-        fig.update_layout(height=700, margin=dict(t=40, b=0, l=0, r=0))
-        st.plotly_chart(fig, use_container_width=True)
+        if inertia is not None:
+            st.sidebar.metric("Varianz (Inertia)", f"{inertia:.2f}")
+            if history_item and 'cluster_inertia' in history_item:
+                st.sidebar.write("Varianz pro Cluster:")
+                for c_id, c_val in history_item['cluster_inertia'].items():
+                    percentage = (c_val / inertia * 100) if inertia > 0 else 0
+                    st.sidebar.write(f"- Cluster {c_id}: {c_val:.2f} ({percentage:.1f}%)")
 
-    with col_controls:
-        st.markdown("### Steuerung")
-        
-        if 'algo' in st.session_state:
-            algo = st.session_state['algo']
-            real_max_step = max(0, len(algo.get_history()) - 1)
-            slider_max = max(1, real_max_step)
-            slider_disabled = (real_max_step == 0)
+        # --- Layout: 2 Columns (Plot | Controls) ---
+        col_plot, col_controls = st.columns([0.75, 0.25], gap="large")
 
-            st.session_state['slider_step'] = st.session_state['algo_step']
-            st.slider("Schritt", 0, slider_max, key="slider_step", on_change=update_from_slider, disabled=slider_disabled)
+        with col_plot:
+            # Title logic
+            if history_item:
+                title = f"Ergebnis: {algo_name} (Schritt {current_step_idx})"
+                if 'action' in history_item and history_item['action']:
+                    title += f" - {history_item['action']}"
+            else:
+                labels = np.zeros(X.shape[0], dtype=int)
+                title = "Rohdaten"
 
-            # Compact Control Grid
-            c1, c2 = st.columns(2)
-            c1.button("Prev", use_container_width=True, on_click=prev_step)
-            c2.button("Next", use_container_width=True, on_click=next_step)
+            # Create Plotly figure
+            df = pd.DataFrame(X, columns=['x', 'y'])
             
-            c3, c4 = st.columns(2)
-            if st.session_state.get('autoplay', False):
-                c3.button("Stop", use_container_width=True, on_click=toggle_autoplay)
+            if labels is not None:
+                unique_labels, counts = np.unique(labels, return_counts=True)
+                label_map = {lbl: f"Cluster {lbl} (n={count})" for lbl, count in zip(unique_labels, counts)}
+                df['label_desc'] = [label_map[l] for l in labels]
+                df = df.sort_values('label_desc')
+                color_col = 'label_desc'
             else:
-                c3.button("Autoplay", use_container_width=True, on_click=toggle_autoplay)
-            c4.button("End", use_container_width=True, on_click=end_step)
+                color_col = None
 
-            st.markdown("---")
-            if st.session_state.get('algo_converged', False):
-                st.success("✅ Konvergiert!")
+            fig = px.scatter(df, x='x', y='y', color=color_col, title=title, 
+                            color_discrete_sequence=px.colors.qualitative.G10,
+                            render_mode='svg')
+            
+            if centroids is not None:
+                fig.add_trace(go.Scatter(
+                    x=centroids[:, 0], y=centroids[:, 1],
+                    mode='markers',
+                    marker=dict(symbol='x', size=14, color='black', line=dict(width=3, color='white')),
+                    name='Zentren'
+                ))
+            
+            # Increase height to use the vertical space better
+            fig.update_layout(height=700, margin=dict(t=40, b=0, l=0, r=0))
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col_controls:
+            st.markdown("### Steuerung")
+            
+            if 'algo' in st.session_state:
+                algo = st.session_state['algo']
+                real_max_step = max(0, len(algo.get_history()) - 1)
+                slider_max = max(1, real_max_step)
+                slider_disabled = (real_max_step == 0)
+
+                st.session_state['slider_step'] = st.session_state['algo_step']
+                st.slider("Schritt", 0, slider_max, key="slider_step", on_change=update_from_slider, disabled=slider_disabled)
+
+                # Compact Control Grid
+                c1, c2 = st.columns(2)
+                c1.button("Prev", use_container_width=True, on_click=prev_step)
+                c2.button("Next", use_container_width=True, on_click=next_step)
+                
+                c3, c4 = st.columns(2)
+                if st.session_state.get('autoplay', False):
+                    c3.button("Stop", use_container_width=True, on_click=toggle_autoplay)
+                else:
+                    c3.button("Autoplay", use_container_width=True, on_click=toggle_autoplay)
+                c4.button("End", use_container_width=True, on_click=end_step)
+
+                st.markdown("---")
+                if st.session_state.get('algo_converged', False):
+                    st.success("✅ Konvergiert!")
+                else:
+                    st.info(f"Schritt: {st.session_state.get('algo_step', 0)}")
             else:
-                st.info(f"Schritt: {st.session_state.get('algo_step', 0)}")
-        else:
-            st.info("Algorithmus noch nicht initialisiert.")
+                st.info("Algorithmus noch nicht initialisiert.")
 
 
-    # Autoplay Logic
-    if 'algo' in st.session_state and st.session_state.get('autoplay', False):
-        algo = st.session_state['algo']
-        if st.session_state['algo_step'] < len(algo.get_history()) - 1:
-            time.sleep(0.3)
-            st.session_state['algo_step'] += 1
-            st.session_state['algo_converged'] = (st.session_state['algo_step'] == len(algo.get_history()) - 1)
-            st.rerun()
-        else:
-            st.session_state['autoplay'] = False
-            st.rerun()
+        # Autoplay Logic
+        if 'algo' in st.session_state and st.session_state.get('autoplay', False):
+            algo = st.session_state['algo']
+            if st.session_state['algo_step'] < len(algo.get_history()) - 1:
+                time.sleep(0.3)
+                st.session_state['algo_step'] += 1
+                st.session_state['algo_converged'] = (st.session_state['algo_step'] == len(algo.get_history()) - 1)
+                st.rerun()
+            else:
+                st.session_state['autoplay'] = False
+                st.rerun()
+    except Exception as e:
+        import traceback
+        st.error(f"Render Error: {e}")
+        st.code(traceback.format_exc())
 
 
 # --- Main Configuration & Sidebars ---
