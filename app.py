@@ -1,20 +1,32 @@
 import streamlit as st
 # --- PyArrow Monkeypatch for stlite/Pyodide ---
-# Fixes AttributeError: module 'pyarrow' has no attribute 'RecordBatch'/'ChunkedArray'
 import sys
+import types
+
+# Create a dummy pyarrow module
+dummy_pa = types.ModuleType("pyarrow")
+dummy_pa.RecordBatch = type("RecordBatch", (), {})
+dummy_pa.ChunkedArray = type("ChunkedArray", (), {})
+dummy_pa.Table = type("Table", (), {})
+dummy_pa.Array = type("Array", (), {})
+
+# Try to import real pyarrow to keep other functionality if present
 try:
     import pyarrow
-    # Define dummy classes for missing attributes to satisfy sklearn checks
+    # Merge dummy attrs into real module
     if not hasattr(pyarrow, 'RecordBatch'):
-        pyarrow.RecordBatch = type("RecordBatch", (), {})
+        pyarrow.RecordBatch = dummy_pa.RecordBatch
     if not hasattr(pyarrow, 'ChunkedArray'):
-        pyarrow.ChunkedArray = type("ChunkedArray", (), {})
+        pyarrow.ChunkedArray = dummy_pa.ChunkedArray
     if not hasattr(pyarrow, 'Table'):
-        pyarrow.Table = type("Table", (), {})
+        pyarrow.Table = dummy_pa.Table
     if not hasattr(pyarrow, 'Array'):
-        pyarrow.Array = type("Array", (), {})
+        pyarrow.Array = dummy_pa.Array
+    # Ensure sys.modules uses this patched version
+    sys.modules['pyarrow'] = pyarrow
 except ImportError:
-    pass
+    # If not found, inject the dummy module completely
+    sys.modules['pyarrow'] = dummy_pa
 # ----------------------------------------------
 
 import pandas as pd
@@ -133,6 +145,23 @@ if 'data_generated' not in st.session_state:
 if 'autoplay' not in st.session_state:
     st.session_state['autoplay'] = False
 
+# --- Debug Info ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("Debug Info")
+st.sidebar.write(f"Streamlit Version: {st.__version__}")
+try:
+    import pyarrow
+    st.sidebar.write(f"PyArrow: Found")
+    st.sidebar.write(f"RecordBatch: {hasattr(pyarrow, 'RecordBatch')}")
+except ImportError:
+    st.sidebar.write("PyArrow: Not Found")
+try:
+    import sklearn
+    st.sidebar.write(f"Sklearn Version: {sklearn.__version__}")
+except:
+    pass
+# ------------------
+
 # --- Sidebar: Algorithm Selection ---
 st.sidebar.header("2. Algorithmus")
 algo_name = st.sidebar.selectbox("Algorithmus", ["K-Means"])
@@ -162,7 +191,7 @@ if algo_name == "K-Means":
 
     
     # Main visualization fragment (handles plot, controls, and dynamic sidebar updates)
-    @st.fragment
+
     def render_visualization():
         X = st.session_state['X']
         algo_name = "K-Means" # Hardcoded for now based on current logic, or pass as arg if dynamic
