@@ -302,7 +302,17 @@ if algo_name == "K-Means":
                 st.rerun()
 
 
+    # Debug output to trace execution flow
+    st.write(f"Debug: Data Generated = {st.session_state.get('data_generated')}")
+    if 'X' in st.session_state:
+        st.write(f"Debug: X Shape = {st.session_state['X'].shape}")
+
     if st.session_state['data_generated']:
-        render_visualization()
+        try:
+            render_visualization()
+        except Exception as e:
+            st.error(f"Error rendering visualization: {e}")
+            import traceback
+            st.code(traceback.format_exc())
     else:
         st.info("Generiere Daten über die Sidebar, um zu beginnen.")
