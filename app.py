@@ -1,4 +1,22 @@
 import streamlit as st
+# --- PyArrow Monkeypatch for stlite/Pyodide ---
+# Fixes AttributeError: module 'pyarrow' has no attribute 'RecordBatch'/'ChunkedArray'
+import sys
+try:
+    import pyarrow
+    # Define dummy classes for missing attributes to satisfy sklearn checks
+    if not hasattr(pyarrow, 'RecordBatch'):
+        pyarrow.RecordBatch = type("RecordBatch", (), {})
+    if not hasattr(pyarrow, 'ChunkedArray'):
+        pyarrow.ChunkedArray = type("ChunkedArray", (), {})
+    if not hasattr(pyarrow, 'Table'):
+        pyarrow.Table = type("Table", (), {})
+    if not hasattr(pyarrow, 'Array'):
+        pyarrow.Array = type("Array", (), {})
+except ImportError:
+    pass
+# ----------------------------------------------
+
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -222,11 +240,8 @@ if algo_name == "K-Means":
                 name='Zentren'
             ))
         
-        # Render Plot (Full Width)
-        fig.update_layout(height=600) # Ensure it's tall enough
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # --- Controls (Below Plot) ---
+
+        # --- Controls (Moved to Top) ---
         if 'algo' in st.session_state:
             algo = st.session_state['algo']
             
@@ -256,6 +271,10 @@ if algo_name == "K-Means":
             st.write(f"Schritt: {st.session_state['algo_step']}")
             if st.session_state['algo_converged']:
                 st.success("Konvergiert!")
+
+        # Render Plot (Full Width)
+        fig.update_layout(height=600) # Ensure it's tall enough
+        st.plotly_chart(fig, use_container_width=True)
         
         # Autoplay Logic (Inside fragment)
         if 'algo' in st.session_state and st.session_state.get('autoplay', False):
@@ -268,6 +287,7 @@ if algo_name == "K-Means":
             else:
                 st.session_state['autoplay'] = False
                 st.rerun()
+
 
     if st.session_state['data_generated']:
         render_visualization()
